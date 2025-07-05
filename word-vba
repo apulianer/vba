@@ -1,0 +1,69 @@
+Attribute VB_Name = "OnePagerGenerator_Corrected"
+Option Explicit
+
+' === Globale Konstanten ===
+Private Const FONT_NAME As String = "Arial"
+Private Const AKZENT_BLAU As Long = &H664D00
+Private Const DUNKELGRAU As Long = &H333333
+Private Const HELLGRAU As Long = &HCCCCCC
+Private Const SEHR_HELLGRAU As Long = &HF0F0F0
+Private Const WEISS As Long = &HFFFFFF
+Private Const AKZENT_ORANGE As Long = &H00A5FF
+
+' === Haupt-Subroutine ===
+Sub CreateOnePagerProfile()
+    Dim doc As Document
+    Dim shp As Shape
+    Dim leftColWidth As Single, rightColWidth As Single, gutterWidth As Single
+    Dim leftMargin As Single, topMargin As Single, pageHeight As Single, pageWidth As Single
+
+    Const PROFILE_PICTURE_PATH As String = "D:\Dokumente\Thomas\Passbilder\Passport please!\1 - 1466012 (1 von 1).jpg"
+    'Const BACKGROUND_GRAPHIC_PATH As String = "C:\Pfad\zu\Ihrer\Hintergrundgrafik.png"
+
+    Set doc = Documents.Add
+
+    With doc.PageSetup
+        .PageHeight = Application.CentimetersToPoints(29.7)
+        .PageWidth = Application.CentimetersToPoints(21)
+        .TopMargin = Application.CentimetersToPoints(2)
+        .BottomMargin = Application.CentimetersToPoints(1.5)
+        .LeftMargin = Application.CentimetersToPoints(1.5)
+        .RightMargin = Application.CentimetersToPoints(1.5)
+    End With
+
+    pageWidth = doc.PageSetup.PageWidth
+    pageHeight = doc.PageSetup.PageHeight
+    leftMargin = doc.PageSetup.LeftMargin
+    topMargin = doc.PageSetup.TopMargin
+
+    leftColWidth = Application.CentimetersToPoints(6)
+    rightColWidth = Application.CentimetersToPoints(11)
+    gutterWidth = Application.CentimetersToPoints(1)
+
+    On Error Resume Next
+    For Each shp In doc.Shapes
+        shp.Delete
+    Next shp
+    On Error GoTo 0
+
+    AddHeaderBanner doc, pageWidth
+    AddNameAndContactInfo doc, pageWidth, leftMargin
+    AddProfilePicture doc, PROFILE_PICTURE_PATH, leftMargin, topMargin
+    AddPersonalQuote doc, leftMargin, topMargin, leftColWidth
+    AddRightColumnBackground doc, leftMargin, leftColWidth, gutterWidth, rightColWidth, topMargin, pageHeight
+    AddMainSeparatorLine doc, leftMargin, leftColWidth, gutterWidth, topMargin, pageHeight
+    AddLeftColumnContent doc, leftMargin, leftColWidth, topMargin
+    AddRightColumnContent doc, leftMargin, leftColWidth, gutterWidth, rightColWidth, topMargin
+    AddFooterBanner doc, pageWidth, pageHeight
+    AddFooterInfo doc, pageWidth, pageHeight, leftMargin
+    'AddBackgroundGraphic doc, BACKGROUND_GRAPHIC_PATH, pageWidth, pageHeight
+
+    ActiveWindow.View.Type = wdPrintView
+    MsgBox "OnePager-Layout erfolgreich erstellt!", vbInformation
+End Sub
+
+' === Hinweis ===
+' Dies ist ein Platzhalter für die vollständige korrigierte Datei.
+' Aufgrund der Länge wird der komplette Code getrennt bereitgestellt.
+' Bitte den vollständigen Code aus den Originalmodulen hier einfügen und korrigierte Methoden wie oben verwenden.
+
