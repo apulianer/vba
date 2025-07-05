@@ -66,7 +66,10 @@ Sub CreateOnePagerProfile()
     ' --- Kopfbereich ---
     Call AddHeaderBanner(doc, pageWidth)
     Call AddNameAndContactInfo(doc, pageWidth, leftMargin)
-    Call AddProfilePicture(doc, PROFILE_PICTURE_PATH, leftMargin, topMargin)
+    If Not AddProfilePicture(doc, PROFILE_PICTURE_PATH, leftMargin, topMargin) Then
+        MsgBox "Konnte Profilbild nicht laden. OnePager-Erstellung wird abgebrochen.", vbCritical, "Fehler bei Bilderstellung"
+        Exit Sub
+    End If
     Call AddPersonalQuote(doc, leftMargin, topMargin, leftColWidth)
 
     ' --- Hauptinhaltsbereich ---
@@ -78,7 +81,11 @@ Sub CreateOnePagerProfile()
     ' --- Fußbereich ---
     Call AddFooterBanner(doc, pageWidth, pageHeight)
     Call AddFooterInfo(doc, pageWidth, pageHeight, leftMargin)
-    Call AddBackgroundGraphic(doc, BACKGROUND_GRAPHIC_PATH, pageWidth, pageHeight)
+    If Not AddBackgroundGraphic(doc, BACKGROUND_GRAPHIC_PATH, pageWidth, pageHeight) Then
+        MsgBox "Konnte Hintergrundgrafik nicht laden. OnePager wird ohne Hintergrundgrafik fertiggestellt.", vbExclamation, "Hinweis Bilderstellung"
+        ' Optional: Decide to proceed without background or also exit here
+        ' For now, proceeding as the message suggests.
+    End If
 
     ' Optional: Ansicht auf Seitenlayout setzen
     ActiveWindow.View.Type = wdPrintView
@@ -154,15 +161,17 @@ Sub AddNameAndContactInfo(doc As Document, pageWidth As Single, leftMargin As Si
     End With
 End Sub
 
-Sub AddProfilePicture(doc As Document, picPath As String, leftMargin As Single, topMargin As Single)
+Function AddProfilePicture(doc As Document, picPath As String, leftMargin As Single, topMargin As Single) As Boolean
     Dim shp As Shape
     Dim picSize As Single
     picSize = Application.CentimetersToPoints(4) ' Durchmesser 4 cm
 
+    AddProfilePicture = False ' Default to failure
+
     ' Prüfen, ob Bildpfad gültig ist
     If Dir(picPath) = "" Then
-        MsgBox "Profilbild nicht gefunden: " & picPath & vbCrLf & "Bitte passen Sie den Pfad im VBA-Code an.", vbExclamation
-        Exit Sub
+        MsgBox "Profilbild nicht gefunden: " & picPath & vbCrLf & "Bitte passen Sie den Pfad im VBA-Code an.", vbExclamation, "Fehler: Profilbild"
+        Exit Function ' Return False
     End If
 
     ' Kreis-Shape erstellen und mit Bild füllen
@@ -175,7 +184,8 @@ Sub AddProfilePicture(doc As Document, picPath As String, leftMargin As Single, 
    .WrapFormat.Type = wdWrapNone
    .ZOrder msoBringToFront ' Sicherstellen, dass es über dem Banner liegt
     End With
-End Sub
+    AddProfilePicture = True ' Success
+End Function
 
 Sub AddPersonalQuote(doc As Document, leftMargin As Single, topMargin As Single, leftColWidth As Single)
     Dim shp As Shape
@@ -373,21 +383,45 @@ Sub AddLeftColumnContent(doc As Document, leftMargin As Single, leftColWidth As 
     ' --- Extras ---
     Call AddSectionHeading(doc, "Extras", leftMargin, currentTop, leftColWidth)
     currentTop = currentTop + Application.CentimetersToPoints(1.2)
-    Set tbl = doc.Tables.Add(Range:=doc.Range(doc.Content.End - 1, doc.Content.End - 1), NumRows:=5, NumColumns:=2)
-    With tbl
-        Set fontObj =.Range.Font
-        With fontObj
-       .Name = FONT_NAME
-       .Size = 9.5
-       .Color = DUNKELGRAU
+
+    ' Create a textbox to contain the Extras table for reliable positioning
+    Dim shpExtrasTableContainer As Shape
+    Dim extrasTableHeight As Single
+    ' Estimate height for 5 rows, approx 0.5cm each + small margin, adjust as needed
+    extrasTableHeight = Application.CentimetersToPoints(3) ' Adjust this if necessary
+
+    Set shpExtrasTableContainer = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=leftMargin, Top:=currentTop, _
+                                        Width:=leftColWidth, Height:=extrasTableHeight)
+    With shpExtrasTableContainer
+        .Line.Visible = msoFalse
+        .Fill.Visible = msoFalse
+        .WrapFormat.Type = wdWrapNone
+        With .TextFrame
+            .MarginLeft = 0
+            .MarginRight = 0
+            .MarginTop = 0
+            .MarginBottom = 0
+            .AutoSize = True ' Allow textbox to resize based on table content
         End With
-   .Borders.Enable = False ' Keine Rahmen [1]
-   .PreferredWidthType = wdPreferredWidthPoints
-   .PreferredWidth = leftColWidth
-   .Columns(1).Width = leftColWidth / 2
-   .Columns(2).Width = leftColWidth / 2
-   .Rows.HeightRule = wdRowHeightAtLeast
-   .Rows.Height = Application.CentimetersToPoints(0.5)
+    End With
+
+    ' Add table inside the textbox
+    Set tbl = shpExtrasTableContainer.TextFrame.TextRange.Tables.Add(Range:=shpExtrasTableContainer.TextFrame.TextRange, NumRows:=5, NumColumns:=2)
+    With tbl
+        Set fontObj = .Range.Font
+        With fontObj
+            .Name = FONT_NAME
+            .Size = 9.5
+            .Color = DUNKELGRAU
+        End With
+        .Borders.Enable = False ' Keine Rahmen [1]
+        .PreferredWidthType = wdPreferredWidthPoints
+        .PreferredWidth = leftColWidth ' Table width should fit within textbox
+        .Columns(1).Width = leftColWidth / 2
+        .Columns(2).Width = leftColWidth / 2
+        .Rows.HeightRule = wdRowHeightAtLeast
+        .Rows.Height = Application.CentimetersToPoints(0.5)
 
         Dim extraSkills(1 To 10) As String
         extraSkills(1) = "Kompetenz"
@@ -402,35 +436,30 @@ Sub AddLeftColumnContent(doc As Document, leftMargin As Single, leftColWidth As 
         extraSkills(10) = "Kompetenz"
 
         For r = 1 To 5
-            Set rng =.Cell(r, 1).Range
+            Set rng = .Cell(r, 1).Range
             With rng
-           .Text = ""
-           .InsertSymbol CharacterNumber:=252, Font:="Wingdings" ' Häkchen [2]
-           .InsertAfter " " & extraSkills(r)
+                .Text = ""
+                .InsertSymbol CharacterNumber:=252, Font:="Wingdings" ' Häkchen [2]
+                .InsertAfter " " & extraSkills(r)
             End With
-            Set rng =.Cell(r, 2).Range
+            Set rng = .Cell(r, 2).Range
             With rng
-           .Text = ""
-           .InsertSymbol CharacterNumber:=252, Font:="Wingdings" ' Häkchen
-           .InsertAfter " " & extraSkills(r + 5)
+                .Text = ""
+                .InsertSymbol CharacterNumber:=252, Font:="Wingdings" ' Häkchen
+                .InsertAfter " " & extraSkills(r + 5)
             End With
         Next r
-        Set paraFormatObj =.Range.ParagraphFormat
+        Set paraFormatObj = .Range.ParagraphFormat
         With paraFormatObj
-       .SpaceAfter = 0
-       .LineSpacingRule = wdLineSpaceSingle
+            .SpaceAfter = 0
+            .LineSpacingRule = wdLineSpaceSingle
         End With
     End With
-    ' Tabelle positionieren (muss nach dem Erstellen erfolgen)
-    ' Hinweis: Das Positionieren einer Tabelle als ShapeRange ist komplexer und kann zu unerwartetem Verhalten führen.
-    ' Für feste Layouts ist es oft besser, Textfelder zu verwenden oder die Tabelle direkt in einem Textfeld zu platzieren.
-    ' Hier wird versucht, die Tabelle als Shape zu behandeln, was nicht immer ideal ist.
-    ' Eine robustere Methode wäre, die Tabelle in einem Textfeld zu erstellen.
-    Set shp = tbl.Range.ShapeRange.Item(1) ' Erster Shape der Tabelle
-    shp.Left = leftMargin
-    shp.Top = currentTop
-    shp.WrapFormat.Type = wdWrapNone
-    currentTop = shp.Top + shp.Height + Application.CentimetersToPoints(0.8)
+
+    ' Update currentTop based on the height of the textbox containing the table
+    ' Ensure AutoSize of TextFrame has completed
+    DoEvents ' Allow Word to process UI updates, can help with immediate height accuracy
+    currentTop = shpExtrasTableContainer.Top + shpExtrasTableContainer.Height + Application.CentimetersToPoints(0.8)
 
     ' --- Expertise ---
     Call AddSectionHeading(doc, "Expertise", leftMargin, currentTop, leftColWidth)
@@ -565,63 +594,93 @@ Sub AddRightColumnContent(doc As Document, leftMargin As Single, leftColWidth As
 
     Dim circleSize As Single
     circleSize = Application.CentimetersToPoints(0.5)
+    Dim timelineEntrySpacing As Single
+    timelineEntrySpacing = Application.CentimetersToPoints(0.5) ' Minimum spacing between entries
+    Dim actualEntryHeight As Single
+    Dim shpDesc As Shape ' To hold the description shape for height measurement
+    Dim shpYear As Shape ' To hold the year shape
+    Dim shpCircle As Shape ' To hold the circle shape
+
+    Dim loopCurrentTop As Single ' Use a local variable for top positioning within the loop
+    loopCurrentTop = currentTop ' Initialize with the starting top for the first entry
 
     For i = 1 To UBound(timelineEntries, 1)
-        Dim entryTop As Single
-        entryTop = currentTop + (i - 1) * Application.CentimetersToPoints(2) ' Vertikaler Abstand zwischen Einträgen
-
         ' Zeitachsen-Kreis
-        Set shp = doc.Shapes.AddShape(msoShapeOval, _
-                                      Left:=timelineX - (circleSize / 2), Top:=entryTop - (circleSize / 2), _
-                                      Width:=circleSize, Height:=circleSize) [5]
-        With shp
-       .Fill.ForeColor.RGB = AKZENT_BLAU
-       .Line.Visible = msoFalse
-       .WrapFormat.Type = wdWrapNone
+        Set shpCircle = doc.Shapes.AddShape(msoShapeOval, _
+                                      Left:=timelineX - (circleSize / 2), Top:=loopCurrentTop - (circleSize / 2), _
+                                      Width:=circleSize, Height:=circleSize) '[5]
+        With shpCircle
+            .Fill.ForeColor.RGB = AKZENT_BLAU
+            .Line.Visible = msoFalse
+            .WrapFormat.Type = wdWrapNone
         End With
 
         ' Jahres-Text (links der Linie)
-        Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
-                                        Left:=leftMargin + leftColWidth + gutterWidth, Top:=entryTop - Application.CentimetersToPoints(0.3), _
+        ' Ensure year text is vertically centered with the circle if possible, or adjust Top based on its own height
+        Set shpYear = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=leftMargin + leftColWidth + gutterWidth, Top:=loopCurrentTop - Application.CentimetersToPoints(0.3), _
                                         Width:=Application.CentimetersToPoints(1.3), Height:=Application.CentimetersToPoints(1))
-        With shp
-       .TextFrame.TextRange.Text = timelineEntries(i, 1)
-            Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+        With shpYear
+            .TextFrame.TextRange.Text = timelineEntries(i, 1)
+            Set fontObj = .TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
             With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
-           .Name = FONT_NAME
-           .Size = 9
-           .Bold = True
-           .Color = DUNKELGRAU
+                .Name = FONT_NAME
+                .Size = 9
+                .Bold = True
+                .Color = DUNKELGRAU
             End With
-            Set paraFormatObj =.TextFrame.TextRange.ParagraphFormat ' Explizite Zuweisung des ParagraphFormat-Objekts
+            Set paraFormatObj = .TextFrame.TextRange.ParagraphFormat ' Explizite Zuweisung des ParagraphFormat-Objekts
             With paraFormatObj ' Hier wird das explizit zugewiesene Objekt verwendet
-           .Alignment = wdAlignParagraphRight [6]
+                .Alignment = wdAlignParagraphRight '[6]
             End With
-       .Line.Visible = msoFalse
-       .Fill.Visible = msoFalse
-       .WrapFormat.Type = wdWrapNone
-       .TextFrame.VerticalAnchor = msoAnchorMiddle
+            .Line.Visible = msoFalse
+            .Fill.Visible = msoFalse
+            .WrapFormat.Type = wdWrapNone
+            .TextFrame.VerticalAnchor = msoAnchorMiddle ' Good for fixed height
+            .TextFrame.AutoSize = True ' Allow height to adjust if text wraps
         End With
+        DoEvents ' Allow year textbox to resize
 
         ' Beschreibungstext (rechts der Linie)
-        Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
-                                        Left:=timelineX + Application.CentimetersToPoints(0.5), Top:=entryTop - Application.CentimetersToPoints(0.3), _
-                                        Width:=rightColWidth - Application.CentimetersToPoints(2), Height:=Application.CentimetersToPoints(2))
-        With shp
-       .TextFrame.TextRange.Text = timelineEntries(i, 2)
-            Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+        Set shpDesc = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=timelineX + Application.CentimetersToPoints(0.5), Top:=loopCurrentTop - Application.CentimetersToPoints(0.3), _
+                                        Width:=rightColWidth - Application.CentimetersToPoints(2), Height:=Application.CentimetersToPoints(2)) ' Initial height, will autosize
+        With shpDesc
+            .TextFrame.TextRange.Text = timelineEntries(i, 2)
+            Set fontObj = .TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
             With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
-           .Name = FONT_NAME
-           .Size = 9
-           .Color = DUNKELGRAU
+                .Name = FONT_NAME
+                .Size = 9
+                .Color = DUNKELGRAU
             End With
-       .Line.Visible = msoFalse
-       .Fill.Visible = msoFalse
-       .WrapFormat.Type = wdWrapNone
-       .TextFrame.AutoSize = True
+            .Line.Visible = msoFalse
+            .Fill.Visible = msoFalse
+            .WrapFormat.Type = wdWrapNone
+            .TextFrame.AutoSize = True
         End With
+        DoEvents ' Allow description textbox to resize
+
+        ' Determine the maximum height of the elements in this row (year text vs description text)
+        actualEntryHeight = shpDesc.Height ' Description text is likely to be taller
+        If shpYear.Height > actualEntryHeight Then
+            actualEntryHeight = shpYear.Height
+        End If
+        ' Ensure a minimum height related to circle if text is very short
+        If actualEntryHeight < circleSize Then actualEntryHeight = circleSize
+
+        ' Update loopCurrentTop for the next entry
+        loopCurrentTop = loopCurrentTop + actualEntryHeight + timelineEntrySpacing
     Next i
-    currentTop = currentTop + (UBound(timelineEntries, 1) * Application.CentimetersToPoints(2)) + Application.CentimetersToPoints(0.8)
+
+    ' Update the main currentTop after the loop, based on the final position of elements
+    ' loopCurrentTop now holds the starting position for a *potential* next element
+    ' So, subtract the last spacing added to get the bottom of the last element group
+    If UBound(timelineEntries, 1) > 0 Then
+        currentTop = loopCurrentTop - timelineEntrySpacing + Application.CentimetersToPoints(0.8) ' Add standard post-section spacing
+    Else
+        currentTop = currentTop + Application.CentimetersToPoints(0.8) ' Default spacing if no entries
+    End If
+
 
     ' --- Arbeitsweise ---
     Call AddSectionHeading(doc, "Arbeitsweise", leftMargin + leftColWidth + gutterWidth, currentTop, rightColWidth)
@@ -703,101 +762,110 @@ End Sub
 Sub AddFooterInfo(doc As Document, pageWidth As Single, pageHeight As Single, leftMargin As Single)
     Dim tbl As Table
     Dim rng As Range
-    Dim footerTop As Single
+    Dim footerRange As Range
     Dim fontObj As Font ' Explizite Deklaration für Font-Objekt
     Dim paraFormatObj As ParagraphFormat ' Explizite Deklaration für ParagraphFormat-Objekt
 
-    footerTop = pageHeight - Application.CentimetersToPoints(1.5) + Application.CentimetersToPoints(0.2) ' Start innerhalb des Banners
+    ' Get the primary footer range
+    If doc.Sections.Count > 0 Then
+        Set footerRange = doc.Sections(1).Footers(wdHeaderFooterPrimary).Range
+    Else
+        ' Fallback or error handling if no sections (should not happen for a new doc)
+        MsgBox "Error: Document has no sections to add a footer.", vbCritical
+        Exit Sub
+    End If
+
+    ' Clear existing content in footer, if any (optional, depends on desired behavior)
+    ' footerRange.Delete
+
+    ' Adjust footerRange to start after any existing content or to position table
+    ' For simplicity, we'll add it at the start of the footer.
+    ' If specific positioning within the footer is needed, further range manipulation is required.
+    ' E.g., add paragraphs before if table should not be at the very top of footer area.
+    footerRange.Collapse wdCollapseStart ' Collapse to start to insert table there
 
     ' Tabelle für 3 Spalten im Footer
-    Set tbl = doc.Tables.Add(Range:=doc.Range(doc.Content.End - 1, doc.Content.End - 1), NumRows:=1, NumColumns:=3)
+    Set tbl = footerRange.Tables.Add(Range:=footerRange, NumRows:=1, NumColumns:=3)
+
     With tbl
-        Set fontObj =.Range.Font ' Explizite Zuweisung des Font-Objekts
-        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
-       .Name = FONT_NAME
-       .Size = 9
-       .Color = WEISS
+        ' Apply general font settings to the table
+        Set fontObj = .Range.Font
+        With fontObj
+            .Name = FONT_NAME
+            .Size = 9
+            .Color = WEISS ' Text color for footer
         End With
-   .Borders.Enable = False ' Keine Rahmen
-   .PreferredWidthType = wdPreferredWidthPoints
-   .PreferredWidth = pageWidth - (2 * leftMargin) ' Breite des Inhaltsbereichs
-   .Columns(1).Width = (pageWidth - (2 * leftMargin)) / 3
-   .Columns(2).Width = (pageWidth - (2 * leftMargin)) / 3
-   .Columns(3).Width = (pageWidth - (2 * leftMargin)) / 3
-   .Rows.HeightRule = wdRowHeightAtLeast
-   .Rows.Height = Application.CentimetersToPoints(1) ' Höhe der Zeile
+
+        .Borders.Enable = False ' Keine Rahmen
+        .PreferredWidthType = wdPreferredWidthPoints
+        ' Calculate width based on page content area (pageWidth - leftMargin - rightMargin)
+        .PreferredWidth = pageWidth - doc.PageSetup.LeftMargin - doc.PageSetup.RightMargin
+
+        Dim colWidth As Single
+        colWidth = .PreferredWidth / 3
+        .Columns(1).Width = colWidth
+        .Columns(2).Width = colWidth
+        .Columns(3).Width = colWidth
+
+        .Rows.HeightRule = wdRowHeightAtLeast
+        .Rows.Height = Application.CentimetersToPoints(1) ' Höhe der Zeile
+        .Range.ParagraphFormat.SpaceAfter = 0 ' No extra space after paragraphs in table
 
         ' Linke Zelle
-        Set rng =.Cell(1, 1).Range
-        Set fontObj = rng.Font
-        With fontObj
-       .Text = ""
-       .InsertSymbol CharacterNumber:=85, Font:="Wingdings" ' Person [2]
-       .InsertAfter " Dr. Name, Unternehmen" & vbCrLf & "Funktion"
-        End With
+        Set rng = .Cell(1, 1).Range
+        rng.Text = "" ' Clear cell before inserting
+        Set fontObj = rng.Font ' Re-apply to cell specifically if needed, though table-level should suffice
+        fontObj.InsertSymbol CharacterNumber:=85, Font:="Wingdings" ' Person [2]
+        fontObj.InsertAfter " Dr. Name, Unternehmen" & vbCrLf & "Funktion"
         Set paraFormatObj = rng.ParagraphFormat
         With paraFormatObj
-       .Alignment = wdAlignParagraphLeft [6]
-       .SpaceAfter = 0
-       .LineSpacingRule = wdLineSpaceSingle
+            .Alignment = wdAlignParagraphLeft '[6]
+            .SpaceAfter = 0
+            .LineSpacingRule = wdLineSpaceSingle
         End With
 
         ' Mittlere Zelle (Blindtext)
-        Set rng =.Cell(1, 2).Range
+        Set rng = .Cell(1, 2).Range
+        rng.Text = "" ' Clear cell
         Set fontObj = rng.Font
-        With fontObj
-       .Text = "Lorem Ipsum" & vbCrLf & "Dolor Sit Amet"
-        End With
+        fontObj.Text = "Lorem Ipsum" & vbCrLf & "Dolor Sit Amet"
         Set paraFormatObj = rng.ParagraphFormat
         With paraFormatObj
-       .Alignment = wdAlignParagraphCenter
-       .SpaceAfter = 0
-       .LineSpacingRule = wdLineSpaceSingle
+            .Alignment = wdAlignParagraphCenter
+            .SpaceAfter = 0
+            .LineSpacingRule = wdLineSpaceSingle
         End With
 
         ' Rechte Zelle
-        Set rng =.Cell(1, 3).Range
+        Set rng = .Cell(1, 3).Range
+        rng.Text = "" ' Clear cell
         Set fontObj = rng.Font
-        With fontObj
-       .Text = ""
-       .InsertSymbol CharacterNumber:=59, Font:="Wingdings" ' Gebäude/Firma
-       .InsertAfter " Dr. Name, Unternehmen" & vbCrLf & "Funktion"
-        End With
+        fontObj.InsertSymbol CharacterNumber:=59, Font:="Wingdings" ' Gebäude/Firma
+        fontObj.InsertAfter " Dr. Name, Unternehmen" & vbCrLf & "Funktion"
         Set paraFormatObj = rng.ParagraphFormat
         With paraFormatObj
-       .Alignment = wdAlignParagraphRight
-       .SpaceAfter = 0
-       .LineSpacingRule = wdLineSpaceSingle
+            .Alignment = wdAlignParagraphRight
+            .SpaceAfter = 0
+            .LineSpacingRule = wdLineSpaceSingle
         End With
     End With
 
-    ' Tabelle positionieren (muss nach dem Erstellen erfolgen)
-    ' Workaround-Hinweis aus vorheriger Antwort bleibt bestehen:
-    ' Das direkte Positionieren einer Tabelle als ShapeRange.Item(1) ist unzuverlässig,
-    ' da Tabellen primär dem Textfluss folgen. Für eine exakte feste Positionierung
-    ' wäre es robuster, die Tabelle innerhalb eines Textfeldes zu erstellen.
-    ' Der aktuelle Ansatz belässt die Tabelle im Haupttextfluss und nutzt die
-    ' Zellenausrichtung und Zeilenhöhe, um sie im Footer-Bereich zu platzieren.
-    ' Dies kann zu leichten Abweichungen führen, ist aber der einfachste Weg ohne
-    ' eine größere Umstrukturierung des Codes.
-    Dim shpTbl As Shape
-    ' Der Versuch, die Tabelle als Shape zu behandeln, ist hier auskommentiert,
-    ' da es zu unvorhersehbarem Verhalten führen kann.
-    ' Set shpTbl = tbl.Range.ShapeRange.Item(1)
-    ' shpTbl.Left = leftMargin
-    ' shpTbl.Top = footerTop
-    ' shpTbl.WrapFormat.Type = wdWrapNone
+    ' The table is now part of the footer's content flow.
+    ' Additional shapes for lines or backgrounds within the footer would need to be added to footerRange.Shapes
 End Sub
 
-Sub AddBackgroundGraphic(doc As Document, graphicPath As String, pageWidth As Single, pageHeight As Single)
+Function AddBackgroundGraphic(doc As Document, graphicPath As String, pageWidth As Single, pageHeight As Single) As Boolean
     Dim shp As Shape
     Dim graphicSize As Single
     graphicSize = Application.CentimetersToPoints(9) ' Durchmesser 9 cm
 
+    AddBackgroundGraphic = False ' Default to failure
+
     ' Prüfen, ob Bildpfad gültig ist
     If Dir(graphicPath) = "" Then
-        MsgBox "Hintergrundgrafik nicht gefunden: " & graphicPath & vbCrLf & "Bitte passen Sie den Pfad im VBA-Code an.", vbExclamation
-        Exit Sub
+        ' MsgBox "Hintergrundgrafik nicht gefunden: " & graphicPath & vbCrLf & "Bitte passen Sie den Pfad im VBA-Code an.", vbExclamation, "Fehler: Hintergrundgrafik"
+        ' The main sub will show a non-critical message, so we might not need one here.
+        Exit Function ' Return False
     End If
 
     ' Hintergrundgrafik als Bild einfügen
@@ -812,4 +880,5 @@ Sub AddBackgroundGraphic(doc As Document, graphicPath As String, pageWidth As Si
    .PictureFormat.Brightness = 0.8 ' Optional: Heller machen [8]
    .ZOrder msoSendToBack
     End With
-End Sub
+    AddBackgroundGraphic = True ' Success
+End Function
