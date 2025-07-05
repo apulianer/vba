@@ -1,0 +1,815 @@
+Option Explicit
+
+' Globale Konstanten für Farben und Schriftarten
+' Korrigiert: RGB-Funktion durch Hexadezimalwerte ersetzt, da Konstanten einen konstanten Ausdruck erfordern.
+' Format: &HBBGGRR (Blau, Grün, Rot)
+Private Const FONT_NAME As String = "Arial" ' Oder eine andere serifenlose Schriftart wie "Calibri"
+Private Const AKZENT_BLAU As Long = &H664D00 ' RGB(0, 77, 102) - Dunkles Türkis/Blau
+Private Const DUNKELGRAU As Long = &H333333 ' RGB(51, 51, 51)
+Private Const HELLGRAU As Long = &HCCCCCC ' RGB(204, 204, 204)
+Private Const SEHR_HELLGRAU As Long = &HF0F0F0 ' RGB(240, 240, 240) - Für subtile Hintergrundgrafik
+Private Const WEISS As Long = &HFFFFFF ' RGB(255, 255, 255)
+Private Const AKZENT_ORANGE As Long = &H00A5FF ' RGB(255, 165, 0) - Für Skill-Balken Füllung
+
+' Haupt-Subroutine zum Erstellen des OnePager-Layouts
+Sub CreateOnePagerProfile()
+
+    Dim doc As Document
+    Dim shp As Shape
+    Dim tbl As Table
+    Dim rng As Range
+    Dim i As Long
+    Dim currentTop As Single
+    Dim leftColWidth As Single
+    Dim rightColWidth As Single
+    Dim gutterWidth As Single
+    Dim leftMargin As Single
+    Dim topMargin As Single
+    Dim pageHeight As Single
+    Dim pageWidth As Single
+
+    ' --- Pfade zu Bildern (BITTE ANPASSEN!) ---
+    Const PROFILE_PICTURE_PATH As String = "C:\Pfad\zu\Ihrem\Profilbild.jpg" ' Beispiel: "C:\Users\IhrName\Pictures\profilbild.jpg"
+    Const BACKGROUND_GRAPHIC_PATH As String = "C:\Pfad\zu\Ihrer\Hintergrundgrafik.png" ' Beispiel: "C:\Users\IhrName\Pictures\zahnrad.png"
+    ' ------------------------------------------
+
+    ' Neues Dokument erstellen
+    Set doc = Documents.Add
+
+    ' Seiteneinrichtung (DIN A4 und Ränder)
+    With doc.PageSetup
+   .PageHeight = Application.CentimetersToPoints(29.7)
+   .PageWidth = Application.CentimetersToPoints(21)
+   .TopMargin = Application.CentimetersToPoints(2)
+   .BottomMargin = Application.CentimetersToPoints(1.5)
+   .LeftMargin = Application.CentimetersToPoints(1.5)
+   .RightMargin = Application.CentimetersToPoints(1.5)
+    End With
+
+    ' Maße in Punkten für die Layoutberechnung
+    pageWidth = doc.PageSetup.PageWidth
+    pageHeight = doc.PageSetup.PageHeight
+    leftMargin = doc.PageSetup.LeftMargin
+    topMargin = doc.PageSetup.TopMargin
+
+    leftColWidth = Application.CentimetersToPoints(6)
+    rightColWidth = Application.CentimetersToPoints(11)
+    gutterWidth = Application.CentimetersToPoints(1)
+
+    ' Vorhandene Shapes löschen, falls das Makro erneut ausgeführt wird
+    On Error Resume Next ' Fehler ignorieren, falls keine Shapes vorhanden sind
+    For Each shp In doc.Shapes
+        shp.Delete
+    Next shp
+    On Error GoTo 0 ' Fehlerbehandlung wieder aktivieren
+
+    ' --- Kopfbereich ---
+    Call AddHeaderBanner(doc, pageWidth)
+    Call AddNameAndContactInfo(doc, pageWidth, leftMargin)
+    Call AddProfilePicture(doc, PROFILE_PICTURE_PATH, leftMargin, topMargin)
+    Call AddPersonalQuote(doc, leftMargin, topMargin, leftColWidth)
+
+    ' --- Hauptinhaltsbereich ---
+    Call AddRightColumnBackground(doc, leftMargin, leftColWidth, gutterWidth, rightColWidth, topMargin, pageHeight)
+    Call AddMainSeparatorLine(doc, leftMargin, leftColWidth, gutterWidth, topMargin, pageHeight)
+    Call AddLeftColumnContent(doc, leftMargin, leftColWidth, topMargin)
+    Call AddRightColumnContent(doc, leftMargin, leftColWidth, gutterWidth, rightColWidth, topMargin)
+
+    ' --- Fußbereich ---
+    Call AddFooterBanner(doc, pageWidth, pageHeight)
+    Call AddFooterInfo(doc, pageWidth, pageHeight, leftMargin)
+    Call AddBackgroundGraphic(doc, BACKGROUND_GRAPHIC_PATH, pageWidth, pageHeight)
+
+    ' Optional: Ansicht auf Seitenlayout setzen
+    ActiveWindow.View.Type = wdPrintView
+
+    MsgBox "OnePager-Layout erfolgreich erstellt!", vbInformation
+End Sub
+
+' --- Hilfs-Subroutinen ---
+
+Sub AddHeaderBanner(doc As Document, pageWidth As Single)
+    Dim shp As Shape
+    Set shp = doc.Shapes.AddShape(msoShapeRectangle, Left:=0, Top:=0, _
+                                  Width:=pageWidth, Height:=Application.CentimetersToPoints(2.5)) ' Höhe 2.5 cm
+    With shp
+   .Fill.ForeColor.RGB = AKZENT_BLAU
+   .Line.Visible = msoFalse
+   .WrapFormat.Type = wdWrapBehind
+   .ZOrder msoSendToBack
+    End With
+End Sub
+
+Sub AddNameAndContactInfo(doc As Document, pageWidth As Single, leftMargin As Single)
+    Dim shpName As Shape
+    Dim shpContact As Shape
+    Dim rng As Range
+    Dim fontObj As Font ' Explizite Deklaration für Font-Objekt
+
+    ' Name
+    Set shpName = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=leftMargin, Top:=Application.CentimetersToPoints(0.5), _
+                                        Width:=Application.CentimetersToPoints(10), Height:=Application.CentimetersToPoints(1.5))
+    With shpName
+   .TextFrame.TextRange.Text = "VORNAME NACHNAME"
+        Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .Name = FONT_NAME
+       .Size = 24
+       .Bold = True
+       .Color = WEISS
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+    End With
+
+    ' Kontaktinformationen
+    Set shpContact = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                           Left:=pageWidth - Application.CentimetersToPoints(1.5) - Application.CentimetersToPoints(6), _
+                                           Top:=Application.CentimetersToPoints(0.5), _
+                                           Width:=Application.CentimetersToPoints(6), Height:=Application.CentimetersToPoints(1.5))
+    With shpContact
+   .TextFrame.TextRange.Text = ""
+        Set rng =.TextFrame.TextRange
+        Set fontObj = rng.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .InsertSymbol CharacterNumber:=80, Font:="Wingdings" ' Telefon-Symbol
+       .InsertAfter " +41 79 123 45 66"
+       .InsertParagraphAfter
+       .InsertSymbol CharacterNumber:=64, Font:="Wingdings" ' E-Mail-Symbol
+       .InsertAfter " name@firma.com"
+       .Name = FONT_NAME
+       .Size = 10
+       .Color = WEISS
+        End With
+        With rng.ParagraphFormat
+       .Alignment = wdAlignParagraphRight
+       .SpaceAfter = 0
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+    End With
+End Sub
+
+Sub AddProfilePicture(doc As Document, picPath As String, leftMargin As Single, topMargin As Single)
+    Dim shp As Shape
+    Dim picSize As Single
+    picSize = Application.CentimetersToPoints(4) ' Durchmesser 4 cm
+
+    ' Prüfen, ob Bildpfad gültig ist
+    If Dir(picPath) = "" Then
+        MsgBox "Profilbild nicht gefunden: " & picPath & vbCrLf & "Bitte passen Sie den Pfad im VBA-Code an.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Kreis-Shape erstellen und mit Bild füllen
+    Set shp = doc.Shapes.AddShape(msoShapeOval, _
+                                  Left:=leftMargin, Top:=topMargin + Application.CentimetersToPoints(0.5), _
+                                  Width:=picSize, Height:=picSize)
+    With shp
+   .Fill.UserPicture picPath ' Bild einfügen und in Kreisform zuschneiden
+   .Line.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+   .ZOrder msoBringToFront ' Sicherstellen, dass es über dem Banner liegt
+    End With
+End Sub
+
+Sub AddPersonalQuote(doc As Document, leftMargin As Single, topMargin As Single, leftColWidth As Single)
+    Dim shp As Shape
+    Dim fontObj As Font ' Explizite Deklaration für Font-Objekt
+    Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                    Left:=leftMargin + Application.CentimetersToPoints(4.5), _
+                                    Top:=topMargin + Application.CentimetersToPoints(0.5), _
+                                    Width:=leftColWidth - Application.CentimetersToPoints(4.5), Height:=Application.CentimetersToPoints(1.5))
+    With shp
+   .TextFrame.TextRange.Text = "HIER STEHT EIN PERSÖNLICHES ZITAT."
+        Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .Name = FONT_NAME
+       .Size = 10
+       .Italic = True
+       .Color = DUNKELGRAU
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+    End With
+End Sub
+
+Sub AddRightColumnBackground(doc As Document, leftMargin As Single, leftColWidth As Single, gutterWidth As Single, rightColWidth As Single, topMargin As Single, pageHeight As Single)
+    Dim shp As Shape
+    Set shp = doc.Shapes.AddShape(msoShapeRectangle, _
+                                  Left:=leftMargin + leftColWidth + gutterWidth, _
+                                  Top:=topMargin + Application.CentimetersToPoints(0.5), _
+                                  Width:=rightColWidth, Height:=pageHeight - topMargin - Application.CentimetersToPoints(0.5) - Application.CentimetersToPoints(1.5)) ' Bis zum Fußbereich
+    With shp
+   .Fill.ForeColor.RGB = SEHR_HELLGRAU ' Hellgrauer Hintergrund
+   .Line.Visible = msoFalse
+   .WrapFormat.Type = wdWrapBehind
+   .ZOrder msoSendToBack
+    End With
+End Sub
+
+Sub AddMainSeparatorLine(doc As Document, leftMargin As Single, leftColWidth As Single, gutterWidth As Single, topMargin As Single, pageHeight As Single)
+    Dim shp As Shape
+    Dim lineX As Single
+    lineX = leftMargin + leftColWidth + (gutterWidth / 2)
+
+    Set shp = doc.Shapes.AddLine(BeginX:=lineX, BeginY:=topMargin + Application.CentimetersToPoints(0.5), _
+                                  EndX:=lineX, EndY:=pageHeight - Application.CentimetersToPoints(1.5)) ' Bis zum Fußbereich
+    With shp.Line
+   .Weight = 0.75 ' Etwas dicker als Haarlinie
+   .ForeColor.RGB = AKZENT_BLAU
+    End With
+End Sub
+
+Sub AddSectionHeading(doc As Document, text As String, leftPos As Single, topPos As Single, width As Single)
+    Dim shpText As Shape
+    Dim shpLine As Shape
+    Dim fontObj As Font ' Explizite Deklaration für Font-Objekt
+
+    Set shpText = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=leftPos, Top:=topPos, _
+                                        Width:=width, Height:=Application.CentimetersToPoints(0.8))
+    With shpText
+   .TextFrame.TextRange.Text = UCase(text)
+        Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .Name = FONT_NAME
+       .Size = 13
+       .Bold = True
+       .Color = AKZENT_BLAU
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+    End With
+
+    ' Unterstreichung
+    Set shpLine = doc.Shapes.AddLine(BeginX:=leftPos, BeginY:=topPos + Application.CentimetersToPoints(0.8), _
+                                     EndX:=leftPos + width, EndY:=topPos + Application.CentimetersToPoints(0.8))
+    With shpLine.Line
+   .Weight = 0.5
+   .ForeColor.RGB = HELLGRAU
+    End With
+End Sub
+
+Sub AddLeftColumnContent(doc As Document, leftMargin As Single, leftColWidth As Single, topMargin As Single)
+    Dim currentTop As Single
+    Dim shp As Shape
+    Dim rng As Range
+    Dim tbl As Table
+    Dim r As Long
+    Dim fontObj As Font ' Explizite Deklaration für Font-Objekt
+    Dim paraFormatObj As ParagraphFormat ' Explizite Deklaration für ParagraphFormat-Objekt
+
+    currentTop = topMargin + Application.CentimetersToPoints(4.5) ' Start unter Profilbild/Zitat
+
+    ' --- Persönlich ---
+    Call AddSectionHeading(doc, "Persönlich", leftMargin, currentTop, leftColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+    Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                    Left:=leftMargin, Top:=currentTop, _
+                                    Width:=leftColWidth, Height:=Application.CentimetersToPoints(3))
+    With shp
+   .TextFrame.TextRange.Text = ""
+        Set rng =.TextFrame.TextRange
+        Set fontObj = rng.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .Text = "Name: Vorname Nachname" & vbCrLf & _
+                    "Nationalität: CH" & vbCrLf & _
+                    "LinkedIn: linkedin.com/in/name"
+       .Name = FONT_NAME
+       .Size = 9.5
+       .Color = DUNKELGRAU
+        End With
+        Set paraFormatObj = rng.ParagraphFormat
+        With paraFormatObj
+       .SpaceAfter = Application.CentimetersToPoints(0.1)
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+        ' Fettformatierung für Schlüsselwörter
+        rng.Characters(1, 5).Font.Bold = True ' Name
+        rng.Characters(19, 12).Font.Bold = True ' Nationalität
+        rng.Characters(35, 8).Font.Bold = True ' LinkedIn
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+   .TextFrame.AutoSize = True ' Automatische Höhenanpassung
+    End With
+    currentTop = shp.Top + shp.Height + Application.CentimetersToPoints(0.8)
+
+    ' --- Kontakt ---
+    Call AddSectionHeading(doc, "Kontakt", leftMargin, currentTop, leftColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+    Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                    Left:=leftMargin, Top:=currentTop, _
+                                    Width:=leftColWidth, Height:=Application.CentimetersToPoints(3))
+    With shp
+   .TextFrame.TextRange.Text = ""
+        Set rng =.TextFrame.TextRange
+        Set fontObj = rng.Font
+        With fontObj
+       .InsertSymbol CharacterNumber:=80, Font:="Wingdings" ' Telefon
+       .InsertAfter " Mobil: +41 79 123 45 67"
+       .InsertParagraphAfter
+       .InsertSymbol CharacterNumber:=64, Font:="Wingdings" ' Email
+       .InsertAfter " Email: name@firma.com"
+       .InsertParagraphAfter
+       .InsertSymbol CharacterNumber:=115, Font:="Wingdings" ' Haus/Standort
+       .InsertAfter " Adresse: Musterstrasse 24, CH-8001 Zürich"
+       .Name = FONT_NAME
+       .Size = 9.5
+       .Color = DUNKELGRAU
+        End With
+        Set paraFormatObj = rng.ParagraphFormat
+        With paraFormatObj
+       .SpaceAfter = Application.CentimetersToPoints(0.1)
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+   .TextFrame.AutoSize = True
+    End With
+    currentTop = shp.Top + shp.Height + Application.CentimetersToPoints(0.8)
+
+    ' --- Ausbildung ---
+    Call AddSectionHeading(doc, "Ausbildung", leftMargin, currentTop, leftColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+    Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                    Left:=leftMargin, Top:=currentTop, _
+                                    Width:=leftColWidth, Height:=Application.CentimetersToPoints(3))
+    With shp
+   .TextFrame.TextRange.Text = ""
+        Set rng =.TextFrame.TextRange
+        Set fontObj = rng.Font
+        With fontObj
+       .Text = "Abschluss: Diplomtitel" & vbCrLf & _
+                    "Institution: Institution" & vbCrLf & _
+                    "Jahr: 1998 – 2001"
+       .Name = FONT_NAME
+       .Size = 9.5
+       .Color = DUNKELGRAU
+        End With
+        Set paraFormatObj = rng.ParagraphFormat
+        With paraFormatObj
+       .SpaceAfter = Application.CentimetersToPoints(0.1)
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+        rng.Characters(1, 9).Font.Bold = True ' Abschluss
+        rng.Characters(26, 11).Font.Bold = True ' Institution
+        rng.Characters(46, 4).Font.Bold = True ' Jahr
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+   .TextFrame.AutoSize = True
+    End With
+    currentTop = shp.Top + shp.Height + Application.CentimetersToPoints(0.8)
+
+    ' --- Extras ---
+    Call AddSectionHeading(doc, "Extras", leftMargin, currentTop, leftColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+    Set tbl = doc.Tables.Add(Range:=doc.Range(doc.Content.End - 1, doc.Content.End - 1), NumRows:=5, NumColumns:=2)
+    With tbl
+        Set fontObj =.Range.Font
+        With fontObj
+       .Name = FONT_NAME
+       .Size = 9.5
+       .Color = DUNKELGRAU
+        End With
+   .Borders.Enable = False ' Keine Rahmen [1]
+   .PreferredWidthType = wdPreferredWidthPoints
+   .PreferredWidth = leftColWidth
+   .Columns(1).Width = leftColWidth / 2
+   .Columns(2).Width = leftColWidth / 2
+   .Rows.HeightRule = wdRowHeightAtLeast
+   .Rows.Height = Application.CentimetersToPoints(0.5)
+
+        Dim extraSkills(1 To 10) As String
+        extraSkills(1) = "Kompetenz"
+        extraSkills(2) = "Kompetenz"
+        extraSkills(3) = "Kompetenz"
+        extraSkills(4) = "Kompetenz"
+        extraSkills(5) = "Kompetenz"
+        extraSkills(6) = "Kompetenz"
+        extraSkills(7) = "Kompetenz"
+        extraSkills(8) = "Kompetenz"
+        extraSkills(9) = "Kompetenz"
+        extraSkills(10) = "Kompetenz"
+
+        For r = 1 To 5
+            Set rng =.Cell(r, 1).Range
+            With rng
+           .Text = ""
+           .InsertSymbol CharacterNumber:=252, Font:="Wingdings" ' Häkchen [2]
+           .InsertAfter " " & extraSkills(r)
+            End With
+            Set rng =.Cell(r, 2).Range
+            With rng
+           .Text = ""
+           .InsertSymbol CharacterNumber:=252, Font:="Wingdings" ' Häkchen
+           .InsertAfter " " & extraSkills(r + 5)
+            End With
+        Next r
+        Set paraFormatObj =.Range.ParagraphFormat
+        With paraFormatObj
+       .SpaceAfter = 0
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+    End With
+    ' Tabelle positionieren (muss nach dem Erstellen erfolgen)
+    ' Hinweis: Das Positionieren einer Tabelle als ShapeRange ist komplexer und kann zu unerwartetem Verhalten führen.
+    ' Für feste Layouts ist es oft besser, Textfelder zu verwenden oder die Tabelle direkt in einem Textfeld zu platzieren.
+    ' Hier wird versucht, die Tabelle als Shape zu behandeln, was nicht immer ideal ist.
+    ' Eine robustere Methode wäre, die Tabelle in einem Textfeld zu erstellen.
+    Set shp = tbl.Range.ShapeRange.Item(1) ' Erster Shape der Tabelle
+    shp.Left = leftMargin
+    shp.Top = currentTop
+    shp.WrapFormat.Type = wdWrapNone
+    currentTop = shp.Top + shp.Height + Application.CentimetersToPoints(0.8)
+
+    ' --- Expertise ---
+    Call AddSectionHeading(doc, "Expertise", leftMargin, currentTop, leftColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+
+    Dim skills(1 To 5) As String
+    Dim skillLevels(1 To 5) As Single ' 0.0 to 1.0
+    skills(1) = "Beispiel Skills"
+    skillLevels(1) = 0.9
+    skills(2) = "Beispiel Skills"
+    skillLevels(2) = 0.7
+    skills(3) = "Beispiel Skills"
+    skillLevels(3) = 0.8
+    skills(4) = "Beispiel Skills"
+    skillLevels(4) = 0.6
+    skills(5) = "Beispiel Skills"
+    skillLevels(5) = 0.95
+
+    Dim barWidth As Single
+    Dim barHeight As Single
+    barWidth = Application.CentimetersToPoints(4)
+    barHeight = Application.CentimetersToPoints(0.4)
+
+    For i = 1 To 5
+        ' Skill Name
+        Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=leftMargin, Top:=currentTop, _
+                                        Width:=leftColWidth - barWidth - Application.CentimetersToPoints(0.5), Height:=barHeight)
+        With shp
+       .TextFrame.TextRange.Text = skills(i)
+            Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+            With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+           .Name = FONT_NAME
+           .Size = 9.5
+           .Color = DUNKELGRAU
+            End With
+       .Line.Visible = msoFalse
+       .Fill.Visible = msoFalse
+       .WrapFormat.Type = wdWrapNone
+       .TextFrame.VerticalAnchor = msoAnchorMiddle
+        End With
+
+        ' Hintergrundbalken (grau)
+        Dim shpBgBar As Shape
+        Set shpBgBar = doc.Shapes.AddShape(msoShapeRectangle, _
+                                           Left:=leftMargin + leftColWidth - barWidth, Top:=currentTop, _
+                                           Width:=barWidth, Height:=barHeight)
+        With shpBgBar
+       .Fill.ForeColor.RGB = HELLGRAU
+       .Line.Visible = msoFalse
+       .WrapFormat.Type = wdWrapNone
+        End With
+
+        ' Füllbalken (orange)
+        Dim shpFillBar As Shape
+        Set shpFillBar = doc.Shapes.AddShape(msoShapeRectangle, _
+                                             Left:=leftMargin + leftColWidth - barWidth, Top:=currentTop, _
+                                             Width:=barWidth * skillLevels(i), Height:=barHeight)
+        With shpFillBar
+       .Fill.ForeColor.RGB = AKZENT_ORANGE
+       .Line.Visible = msoFalse
+       .WrapFormat.Type = wdWrapNone
+        End With
+
+        currentTop = currentTop + barHeight + Application.CentimetersToPoints(0.3) ' Abstand zwischen Balken
+    Next i
+End Sub
+
+Sub AddRightColumnContent(doc As Document, leftMargin As Single, leftColWidth As Single, gutterWidth As Single, rightColWidth As Single, topMargin As Single)
+    Dim currentTop As Single
+    Dim shp As Shape
+    Dim rng As Range
+    Dim timelineLine As Shape
+    Dim timelineX As Single
+    Dim i As Long
+    Dim fontObj As Font ' Explizite Deklaration für Font-Objekt
+    Dim paraFormatObj As ParagraphFormat ' Explizite Deklaration für ParagraphFormat-Objekt
+
+    currentTop = topMargin + Application.CentimetersToPoints(0.5) ' Start unter Kopfzeile
+    timelineX = leftMargin + leftColWidth + gutterWidth + Application.CentimetersToPoints(1.5) ' X-Position der Zeitachsenlinie
+
+    ' --- Über Mich ---
+    Call AddSectionHeading(doc, "Über Mich", leftMargin + leftColWidth + gutterWidth, currentTop, rightColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+    Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                    Left:=leftMargin + leftColWidth + gutterWidth, Top:=currentTop, _
+                                    Width:=rightColWidth, Height:=Application.CentimetersToPoints(6)) ' Geschätzte Höhe
+    With shp
+   .TextFrame.TextRange.Text = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet. Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
+        Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .Name = FONT_NAME
+       .Size = 10
+       .Color = DUNKELGRAU
+        End With
+        Set paraFormatObj =.TextFrame.TextRange.ParagraphFormat ' Explizite Zuweisung des ParagraphFormat-Objekts
+        With paraFormatObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .LineSpacingRule = wdLineSpaceMultiple
+       .LineSpacing = Application.PointsToLines(12) ' 1.2-fache Zeilenhöhe für 10pt Schrift [3, 4]
+       .SpaceAfter = Application.CentimetersToPoints(0.2)
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+   .TextFrame.AutoSize = True
+    End With
+    currentTop = shp.Top + shp.Height + Application.CentimetersToPoints(0.8)
+
+    ' --- Timeline ---
+    Call AddSectionHeading(doc, "Timeline", leftMargin + leftColWidth + gutterWidth, currentTop, rightColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+
+    ' Vertikale Zeitachsenlinie
+    Set timelineLine = doc.Shapes.AddLine(BeginX:=timelineX, BeginY:=currentTop, _
+                                          EndX:=timelineX, EndY:=currentTop + Application.CentimetersToPoints(10)) ' Länge anpassen
+    With timelineLine.Line
+   .Weight = 1
+   .ForeColor.RGB = AKZENT_BLAU
+    End With
+
+    Dim timelineEntries(1 To 5, 1 To 2) As String
+    timelineEntries(1, 1) = "seit 2017"
+    timelineEntries(1, 2) = "Tätigkeit" & vbCrLf & "Muster Firma" & vbCrLf & "Ort"
+    timelineEntries(2, 1) = "2014"
+    timelineEntries(2, 2) = "Tätigkeit" & vbCrLf & "Muster Firma" & vbCrLf & "Ort"
+    timelineEntries(3, 1) = "2012"
+    timelineEntries(3, 2) = "Tätigkeit" & vbCrLf & "Muster Firma" & vbCrLf & "Ort"
+    timelineEntries(4, 1) = "2009"
+    timelineEntries(4, 2) = "Tätigkeit" & vbCrLf & "Muster Firma" & vbCrLf & "Ort"
+    timelineEntries(5, 1) = "2007"
+    timelineEntries(5, 2) = "Tätigkeit" & vbCrLf & "Muster Firma" & vbCrLf & "Ort"
+
+    Dim circleSize As Single
+    circleSize = Application.CentimetersToPoints(0.5)
+
+    For i = 1 To UBound(timelineEntries, 1)
+        Dim entryTop As Single
+        entryTop = currentTop + (i - 1) * Application.CentimetersToPoints(2) ' Vertikaler Abstand zwischen Einträgen
+
+        ' Zeitachsen-Kreis
+        Set shp = doc.Shapes.AddShape(msoShapeOval, _
+                                      Left:=timelineX - (circleSize / 2), Top:=entryTop - (circleSize / 2), _
+                                      Width:=circleSize, Height:=circleSize) [5]
+        With shp
+       .Fill.ForeColor.RGB = AKZENT_BLAU
+       .Line.Visible = msoFalse
+       .WrapFormat.Type = wdWrapNone
+        End With
+
+        ' Jahres-Text (links der Linie)
+        Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=leftMargin + leftColWidth + gutterWidth, Top:=entryTop - Application.CentimetersToPoints(0.3), _
+                                        Width:=Application.CentimetersToPoints(1.3), Height:=Application.CentimetersToPoints(1))
+        With shp
+       .TextFrame.TextRange.Text = timelineEntries(i, 1)
+            Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+            With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+           .Name = FONT_NAME
+           .Size = 9
+           .Bold = True
+           .Color = DUNKELGRAU
+            End With
+            Set paraFormatObj =.TextFrame.TextRange.ParagraphFormat ' Explizite Zuweisung des ParagraphFormat-Objekts
+            With paraFormatObj ' Hier wird das explizit zugewiesene Objekt verwendet
+           .Alignment = wdAlignParagraphRight [6]
+            End With
+       .Line.Visible = msoFalse
+       .Fill.Visible = msoFalse
+       .WrapFormat.Type = wdWrapNone
+       .TextFrame.VerticalAnchor = msoAnchorMiddle
+        End With
+
+        ' Beschreibungstext (rechts der Linie)
+        Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                        Left:=timelineX + Application.CentimetersToPoints(0.5), Top:=entryTop - Application.CentimetersToPoints(0.3), _
+                                        Width:=rightColWidth - Application.CentimetersToPoints(2), Height:=Application.CentimetersToPoints(2))
+        With shp
+       .TextFrame.TextRange.Text = timelineEntries(i, 2)
+            Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+            With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+           .Name = FONT_NAME
+           .Size = 9
+           .Color = DUNKELGRAU
+            End With
+       .Line.Visible = msoFalse
+       .Fill.Visible = msoFalse
+       .WrapFormat.Type = wdWrapNone
+       .TextFrame.AutoSize = True
+        End With
+    Next i
+    currentTop = currentTop + (UBound(timelineEntries, 1) * Application.CentimetersToPoints(2)) + Application.CentimetersToPoints(0.8)
+
+    ' --- Arbeitsweise ---
+    Call AddSectionHeading(doc, "Arbeitsweise", leftMargin + leftColWidth + gutterWidth, currentTop, rightColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+    Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                    Left:=leftMargin + leftColWidth + gutterWidth, Top:=currentTop, _
+                                    Width:=rightColWidth, Height:=Application.CentimetersToPoints(4)) ' Geschätzte Höhe
+    With shp
+   .TextFrame.TextRange.Text = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
+        Set fontObj =.TextFrame.TextRange.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .Name = FONT_NAME
+       .Size = 10
+       .Color = DUNKELGRAU
+        End With
+        Set paraFormatObj =.TextFrame.TextRange.ParagraphFormat ' Explizite Zuweisung des ParagraphFormat-Objekts
+        With paraFormatObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .LineSpacingRule = wdLineSpaceMultiple
+       .LineSpacing = Application.PointsToLines(12)
+       .SpaceAfter = Application.CentimetersToPoints(0.2)
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+   .TextFrame.AutoSize = True
+    End With
+    currentTop = shp.Top + shp.Height + Application.CentimetersToPoints(0.8)
+
+    ' --- Referenz ---
+    Call AddSectionHeading(doc, "Referenz", leftMargin + leftColWidth + gutterWidth, currentTop, rightColWidth)
+    currentTop = currentTop + Application.CentimetersToPoints(1.2)
+    Set shp = doc.Shapes.AddTextbox(msoTextOrientationHorizontal, _
+                                    Left:=leftMargin + leftColWidth + gutterWidth, Top:=currentTop, _
+                                    Width:=rightColWidth, Height:=Application.CentimetersToPoints(3))
+    With shp
+   .TextFrame.TextRange.Text = ""
+        Set rng =.TextFrame.TextRange
+        Set fontObj = rng.Font
+        With fontObj
+       .InsertSymbol CharacterNumber:=85, Font:="Wingdings" ' Person
+       .InsertAfter " Vorname Nachname, Funktion"
+       .InsertParagraphAfter
+       .InsertSymbol CharacterNumber:=59, Font:="Wingdings" ' Gebäude/Firma
+       .InsertAfter " Firma"
+       .InsertParagraphAfter
+       .InsertSymbol CharacterNumber:=80, Font:="Wingdings" ' Telefon
+       .InsertAfter " 079 123 45 66"
+       .InsertParagraphAfter
+       .InsertSymbol CharacterNumber:=64, Font:="Wingdings" ' Email
+       .InsertAfter " name@firma.com"
+       .Name = FONT_NAME
+       .Size = 9.5
+       .Color = DUNKELGRAU
+        End With
+        Set paraFormatObj = rng.ParagraphFormat
+        With paraFormatObj
+       .SpaceAfter = Application.CentimetersToPoints(0.1)
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+   .Line.Visible = msoFalse
+   .Fill.Visible = msoFalse
+   .WrapFormat.Type = wdWrapNone
+   .TextFrame.AutoSize = True
+    End With
+End Sub
+
+Sub AddFooterBanner(doc As Document, pageWidth As Single, pageHeight As Single)
+    Dim shp As Shape
+    Set shp = doc.Shapes.AddShape(msoShapeRectangle, Left:=0, Top:=pageHeight - Application.CentimetersToPoints(1.5), _
+                                  Width:=pageWidth, Height:=Application.CentimetersToPoints(1.5)) ' Höhe 1.5 cm
+    With shp
+   .Fill.ForeColor.RGB = AKZENT_BLAU
+   .Line.Visible = msoFalse
+   .WrapFormat.Type = wdWrapBehind [5, 7]
+   .ZOrder msoSendToBack
+    End With
+End Sub
+
+Sub AddFooterInfo(doc As Document, pageWidth As Single, pageHeight As Single, leftMargin As Single)
+    Dim tbl As Table
+    Dim rng As Range
+    Dim footerTop As Single
+    Dim fontObj As Font ' Explizite Deklaration für Font-Objekt
+    Dim paraFormatObj As ParagraphFormat ' Explizite Deklaration für ParagraphFormat-Objekt
+
+    footerTop = pageHeight - Application.CentimetersToPoints(1.5) + Application.CentimetersToPoints(0.2) ' Start innerhalb des Banners
+
+    ' Tabelle für 3 Spalten im Footer
+    Set tbl = doc.Tables.Add(Range:=doc.Range(doc.Content.End - 1, doc.Content.End - 1), NumRows:=1, NumColumns:=3)
+    With tbl
+        Set fontObj =.Range.Font ' Explizite Zuweisung des Font-Objekts
+        With fontObj ' Hier wird das explizit zugewiesene Objekt verwendet
+       .Name = FONT_NAME
+       .Size = 9
+       .Color = WEISS
+        End With
+   .Borders.Enable = False ' Keine Rahmen
+   .PreferredWidthType = wdPreferredWidthPoints
+   .PreferredWidth = pageWidth - (2 * leftMargin) ' Breite des Inhaltsbereichs
+   .Columns(1).Width = (pageWidth - (2 * leftMargin)) / 3
+   .Columns(2).Width = (pageWidth - (2 * leftMargin)) / 3
+   .Columns(3).Width = (pageWidth - (2 * leftMargin)) / 3
+   .Rows.HeightRule = wdRowHeightAtLeast
+   .Rows.Height = Application.CentimetersToPoints(1) ' Höhe der Zeile
+
+        ' Linke Zelle
+        Set rng =.Cell(1, 1).Range
+        Set fontObj = rng.Font
+        With fontObj
+       .Text = ""
+       .InsertSymbol CharacterNumber:=85, Font:="Wingdings" ' Person [2]
+       .InsertAfter " Dr. Name, Unternehmen" & vbCrLf & "Funktion"
+        End With
+        Set paraFormatObj = rng.ParagraphFormat
+        With paraFormatObj
+       .Alignment = wdAlignParagraphLeft [6]
+       .SpaceAfter = 0
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+
+        ' Mittlere Zelle (Blindtext)
+        Set rng =.Cell(1, 2).Range
+        Set fontObj = rng.Font
+        With fontObj
+       .Text = "Lorem Ipsum" & vbCrLf & "Dolor Sit Amet"
+        End With
+        Set paraFormatObj = rng.ParagraphFormat
+        With paraFormatObj
+       .Alignment = wdAlignParagraphCenter
+       .SpaceAfter = 0
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+
+        ' Rechte Zelle
+        Set rng =.Cell(1, 3).Range
+        Set fontObj = rng.Font
+        With fontObj
+       .Text = ""
+       .InsertSymbol CharacterNumber:=59, Font:="Wingdings" ' Gebäude/Firma
+       .InsertAfter " Dr. Name, Unternehmen" & vbCrLf & "Funktion"
+        End With
+        Set paraFormatObj = rng.ParagraphFormat
+        With paraFormatObj
+       .Alignment = wdAlignParagraphRight
+       .SpaceAfter = 0
+       .LineSpacingRule = wdLineSpaceSingle
+        End With
+    End With
+
+    ' Tabelle positionieren (muss nach dem Erstellen erfolgen)
+    ' Workaround-Hinweis aus vorheriger Antwort bleibt bestehen:
+    ' Das direkte Positionieren einer Tabelle als ShapeRange.Item(1) ist unzuverlässig,
+    ' da Tabellen primär dem Textfluss folgen. Für eine exakte feste Positionierung
+    ' wäre es robuster, die Tabelle innerhalb eines Textfeldes zu erstellen.
+    ' Der aktuelle Ansatz belässt die Tabelle im Haupttextfluss und nutzt die
+    ' Zellenausrichtung und Zeilenhöhe, um sie im Footer-Bereich zu platzieren.
+    ' Dies kann zu leichten Abweichungen führen, ist aber der einfachste Weg ohne
+    ' eine größere Umstrukturierung des Codes.
+    Dim shpTbl As Shape
+    ' Der Versuch, die Tabelle als Shape zu behandeln, ist hier auskommentiert,
+    ' da es zu unvorhersehbarem Verhalten führen kann.
+    ' Set shpTbl = tbl.Range.ShapeRange.Item(1)
+    ' shpTbl.Left = leftMargin
+    ' shpTbl.Top = footerTop
+    ' shpTbl.WrapFormat.Type = wdWrapNone
+End Sub
+
+Sub AddBackgroundGraphic(doc As Document, graphicPath As String, pageWidth As Single, pageHeight As Single)
+    Dim shp As Shape
+    Dim graphicSize As Single
+    graphicSize = Application.CentimetersToPoints(9) ' Durchmesser 9 cm
+
+    ' Prüfen, ob Bildpfad gültig ist
+    If Dir(graphicPath) = "" Then
+        MsgBox "Hintergrundgrafik nicht gefunden: " & graphicPath & vbCrLf & "Bitte passen Sie den Pfad im VBA-Code an.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Hintergrundgrafik als Bild einfügen
+    Set shp = doc.Shapes.AddPicture(FileName:=graphicPath, LinkToFile:=False, SaveWithDocument:=True, _
+                                     Left:=pageWidth - graphicSize - Application.CentimetersToPoints(1.5), _
+                                     Top:=pageHeight - graphicSize - Application.CentimetersToPoints(1.5), _
+                                     Width:=graphicSize, Height:=graphicSize) [5]
+    With shp
+   .WrapFormat.Type = wdWrapBehind [5, 7]
+   .Fill.Transparency = 0.7 ' Halbtransparent
+   .PictureFormat.ColorType = msoPictureGrayscale ' Optional: Graustufen [8]
+   .PictureFormat.Brightness = 0.8 ' Optional: Heller machen [8]
+   .ZOrder msoSendToBack
+    End With
+End Sub
